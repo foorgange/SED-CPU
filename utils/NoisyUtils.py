@@ -293,10 +293,10 @@ def getNoisyData(seed, dataset, data_root, data_percent, noise_type, noise_rate,
     """
     if dataset == "CIFAR10" or dataset == "cifar10":
         num_classes = 10
-        train_set = CIFAR10(root=data_root, train=True, download=False)
+        train_set = CIFAR10(root=data_root, train=True, download=True)
     elif dataset == "CIFAR100" or dataset == "cifar100":
         num_classes = 100
-        train_set = CIFAR100(root=data_root, train=True, download=False)
+        train_set = CIFAR100(root=data_root, train=True, download=True)
 
     return dataset_split(train_set.data, np.array(train_set.targets), noise_rate, noise_type, data_percent, seed, num_classes, include_noise)
 
@@ -311,13 +311,13 @@ def getDataLoaders(seed, dataset, data_root, data_percent, noise_type, noise_rat
                                               transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
         transform_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
         num_classes = 10
-        train_set = CIFAR10(root=data_root, train=True, download=False)
+        train_set = CIFAR10(root=data_root, train=True, download=True)
         test_set = CIFAR10(root=data_root, train=False, transform=transform_test, download=True)
     elif dataset == "CIFAR100" or dataset == "cifar100":
         transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
         transform_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
         num_classes = 100
-        train_set = CIFAR100(root=data_root, train=True, download=False)
+        train_set = CIFAR100(root=data_root, train=True, download=True)
         test_set = CIFAR100(root=data_root, train=False, transform=transform_test, download=True)
 
     train_data, val_data, train_noisy_labels, val_noisy_labels, train_clean_labels, val_clean_labels = dataset_split(train_set.data, np.array(train_set.targets), noise_rate, noise_type, data_percent, seed, num_classes)

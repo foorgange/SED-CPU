@@ -36,8 +36,8 @@ def warmup(net, scs, scr, net_ema, ema, optimizer, trainloader, dev, train_loss_
         curr_lr = [group['lr'] for group in optimizer.param_groups][0]
 
         x, _ = sample['data']
-        x = x.to(device)
-        y = sample['label'].to(device)
+        x = x.to(dev)
+        y = sample['label'].to(dev).long()
         outputs = net(x)
         logits = outputs['logits'] if type(outputs) is dict else outputs
         loss_ce = F.cross_entropy(logits, y)
@@ -58,20 +58,20 @@ def warmup(net, scs, scr, net_ema, ema, optimizer, trainloader, dev, train_loss_
         pbar.set_description(f'WARMUP TRAINING (lr={curr_lr:.3e})')
 
 
-def robust_train(net, scs, scr, n_samples, net_ema, ema, optimizer, trainloader, train_loss_meter,train_accuracy_meter, num_class, params):
+def robust_train(net, scs, scr, n_samples, net_ema, ema, optimizer, trainloader, train_loss_meter,train_accuracy_meter, num_class, params, dev):
     net.train()
     pbar = tqdm(trainloader, ncols=150, ascii=' >', leave=False, desc='eval training')
 
-    temp_logits = torch.zeros((n_samples,num_class)).cuda()
-    temp_logits_ema = torch.zeros((n_samples, num_class)).cuda()
-    label = torch.zeros(n_samples).cuda()
-    psedu_label = torch.zeros(n_samples).cuda()
+    temp_logits = torch.zeros((n_samples,num_class)).to(dev)
+    temp_logits_ema = torch.zeros((n_samples, num_class)).to(dev)
+    label = torch.zeros(n_samples).to(dev)
+    psedu_label = torch.zeros(n_samples).to(dev)
     with torch.no_grad():
         for it, sample in enumerate(pbar):
             indices = sample['index']
             x, _ = sample['data']
-            x= x.to(device)
-            y = sample['label'].to(device)
+            x= x.to(dev)
+            y = sample['label'].to(dev)
             outputs = net(x)
 
             outputs_ema = net_ema(x)
@@ -96,8 +96,8 @@ def robust_train(net, scs, scr, n_samples, net_ema, ema, optimizer, trainloader,
         indices = sample['index']
         x, x_s = sample['data']
         x, x_s = x.to(device), x_s.to(device)
-        y = sample['label'].to(device)
-        y_true = sample['label_true'].to(device)
+        y = sample['label'].to(device).long()
+        y_true = sample['label_true'].to(device).long()
         outputs = net(x)
         outputs_s = net(x_s)
         pesudo = psedu_label[indices].long()
@@ -188,7 +188,7 @@ def build_model(num_classes, params_init, dev, config):
     else:
         net = CNN(input_channel=3, n_outputs=n_classes)
 
-    return net.cuda()
+    return net.to(dev)
 
 
 def build_optimizer(net, params):
@@ -210,9 +210,9 @@ def build_loader(params):
                                                           transform['cifar_train_strong_aug']),
                                           transform['cifar_test'], noise_type=params.noise_type,
                                           openset_ratio=params.openset_ratio, closeset_ratio=params.closeset_ratio)
-        trainloader = DataLoader(dataset['train'], batch_size=params.batch_size, shuffle=True, num_workers=8,
+        trainloader = DataLoader(dataset['train'], batch_size=params.batch_size, shuffle=True, num_workers=0,
                                  pin_memory=True)
-        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=8, pin_memory=False)
+        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=0, pin_memory=False)
     if dataset_n.startswith('web-'):
         class_ = {"web-aircraft": 100, "web-bird": 200, "web-car": 196}
         num_classes = class_[dataset_n]
@@ -220,9 +220,9 @@ def build_loader(params):
         dataset = build_webfg_dataset(os.path.join('Datasets', dataset_n),
                                       CLDataTransform(transform['train'], transform["train_strong_aug"]),
                                       transform['test'])
-        trainloader = DataLoader(dataset["train"], batch_size=params.batch_size, shuffle=True, num_workers=4,
+        trainloader = DataLoader(dataset["train"], batch_size=params.batch_size, shuffle=True, num_workers=0,
                                  pin_memory=True)
-        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=4,
+        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=0,
                                  pin_memory=False)
 
     num_samples = len(trainloader.dataset)
@@ -292,7 +292,7 @@ if __name__ == '__main__':
         path = config.resume
         dict_s = torch.load(path, map_location='cpu')
         model.load_state_dict(dict_s)
-        model.cuda()
+        model.to(device)
 
     # create optimizer & lr_plan or lr_scheduler
     optim = build_optimizer(model, config)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
         if epoch < config.warmup_epochs:
             warmup(model, scs, scr, model_ema, ema, optim, input_loader, device, train_loss_meter,train_accuracy_meter)
         else:
-            robust_train(model, scs, scr, n_samples, model_ema, ema, optim, input_loader, train_loss_meter,train_accuracy_meter, n_classes, config)
+            robust_train(model, scs, scr, n_samples, model_ema, ema, optim, input_loader, train_loss_meter,train_accuracy_meter, n_classes, config, device)
 
         eval_result = evaluate_cls_acc(loader_dict['test_loader'], model, device)
         test_accuracy = eval_result['accuracy']

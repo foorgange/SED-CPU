@@ -123,24 +123,24 @@ def build_transform(rescale_size=512, crop_size=448):
 
 
 def build_cifar10n_dataset(root, train_transform, test_transform, noise_type, openset_ratio, closeset_ratio):
-    train_data = NoisyCIFAR10(root, train=True, transform=train_transform, download=False, noise_type=noise_type, closeset_ratio=closeset_ratio,
+    train_data = NoisyCIFAR10(root, train=True, transform=train_transform, download=True, noise_type=noise_type, closeset_ratio=closeset_ratio,
                                openset_ratio=openset_ratio, verbose=False)
-    test_data = NoisyCIFAR10(root, train=False, transform=test_transform, download=False, noise_type='clean', closeset_ratio=closeset_ratio,
+    test_data = NoisyCIFAR10(root, train=False, transform=test_transform, download=True, noise_type='clean', closeset_ratio=closeset_ratio,
                               openset_ratio=openset_ratio, verbose=False)
     return {'train': train_data, 'test': test_data, 'n_train_samples': len(train_data.data), 'n_test_samples': len(test_data.data)}
 
 
 def build_cifar100n_dataset(root, train_transform, test_transform, noise_type, openset_ratio, closeset_ratio):
-    train_data = NoisyCIFAR100(root, train=True, transform=train_transform, download=False, noise_type=noise_type, closeset_ratio=closeset_ratio,
+    train_data = NoisyCIFAR100(root, train=True, transform=train_transform, download=True, noise_type=noise_type, closeset_ratio=closeset_ratio,
                                openset_ratio=openset_ratio, verbose=True)
-    test_data = NoisyCIFAR100(root, train=False, transform=test_transform, download=False, noise_type='clean', closeset_ratio=closeset_ratio,
+    test_data = NoisyCIFAR100(root, train=False, transform=test_transform, download=True, noise_type='clean', closeset_ratio=closeset_ratio,
                               openset_ratio=openset_ratio, verbose=True)
     return {'train': train_data, 'test': test_data, 'n_train_samples': len(train_data.data), 'n_test_samples': len(test_data.data)}
 
 def build_cifar100n_class_imbalanced_dataset(root, train_transform, test_transform, noise_type, openset_ratio, closeset_ratio):
-    train_data = NoisyCIFAR100_class_imbalanced(root, train=True, transform=train_transform, download=False, noise_type=noise_type, closeset_ratio=closeset_ratio,
+    train_data = NoisyCIFAR100_class_imbalanced(root, train=True, transform=train_transform, download=True, noise_type=noise_type, closeset_ratio=closeset_ratio,
                                openset_ratio=openset_ratio, verbose=True)
-    test_data = NoisyCIFAR100_class_imbalanced(root, train=False, transform=test_transform, download=False, noise_type='clean', closeset_ratio=closeset_ratio,
+    test_data = NoisyCIFAR100_class_imbalanced(root, train=False, transform=test_transform, download=True, noise_type='clean', closeset_ratio=closeset_ratio,
                               openset_ratio=openset_ratio, verbose=True)
     return {'train': train_data, 'test': test_data, 'n_train_samples': len(train_data.data), 'n_test_samples': len(test_data.data)}
 

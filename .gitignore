@@ -1,0 +1,32 @@
+# 数据集文件
+/Datasets/
+/downloads/
+/data/cifar100/
+
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+/svenv/
+
+# IDE文件
+.idea/
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+
+# 模型文件
+*.pth
+*.pt
+*.h5
+*.ckpt
+
+# 其他可能的大文件
+*.tar
+*.gz
+*.zip

@@ -15,21 +15,13 @@ def init_seeds(seed=0):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
     cudnn.deterministic = True
     cudnn.benchmark = True
-    torch.cuda.empty_cache()
 
 
 def set_device(gpu=None):
-    if gpu is not None:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-    try:
-        print(f'Available GPUs Index : {os.environ["CUDA_VISIBLE_DEVICES"]}')
-    except KeyError:
-        print('No GPU available, using CPU ... ')
-    return torch.device('cuda') if torch.cuda.device_count() >= 1 else torch.device('cpu')
+    print('强制使用CPU设备')
+    return torch.device('cpu')
 
 
 def save_checkpoint(state, filename='checkpoint.pth'):

@@ -18,6 +18,8 @@ from model.SevenCNN import CNN
 from data.imbalance_cifar import *
 from data.Clothing1M import *
 from utils.ema import EMA
+from data.dummy_dataset import build_dummy_webfg_dataset
+from data.stanford_dogs import build_stanford_dogs_dataset, build_dummy_stanford_dogs_dataset
 from utils.SCS import SCS
 from utils.SCR import SCR
 
@@ -34,6 +36,7 @@ def conf_penalty(outputs):
     probs = torch.softmax(outputs, dim=1)
     return torch.mean(torch.sum(probs.log() * probs, dim=1))
 def warmup(net, scs, scr, net_ema, ema, optimizer, trainloader, dev, train_loss_meter,train_accuracy_meter):
+    global device
     net.train()
     pbar = tqdm(trainloader, ncols=150, ascii=' >', leave=False, desc='WARMUP TRAINING')
     for it, sample in enumerate(pbar):
@@ -41,7 +44,7 @@ def warmup(net, scs, scr, net_ema, ema, optimizer, trainloader, dev, train_loss_
 
         x, _ = sample['data']
         x = x.to(device)
-        y = sample['label'].to(device)
+        y = sample['label'].to(device).long()
         outputs = net(x)
         logits = outputs['logits'] if type(outputs) is dict else outputs
         loss_ce = F.cross_entropy(logits, y, label_smoothing=0.3)
@@ -63,13 +66,14 @@ def warmup(net, scs, scr, net_ema, ema, optimizer, trainloader, dev, train_loss_
 
 
 def robust_train(net, scs, scr, n_samples, net_ema, ema, optimizer, trainloader, train_loss_meter,train_accuracy_meter, num_class, params):
+    global device
     net.train()
     pbar = tqdm(trainloader, ncols=150, ascii=' >', leave=False, desc='eval training')
 
-    temp_logits = torch.zeros((n_samples,num_class)).cuda()
-    temp_logits_ema = torch.zeros((n_samples, num_class)).cuda()
-    label = torch.zeros(n_samples).cuda()
-    psedu_label = torch.zeros(n_samples).cuda()
+    temp_logits = torch.zeros((n_samples,num_class)).to(device)
+    temp_logits_ema = torch.zeros((n_samples, num_class)).to(device)
+    label = torch.zeros(n_samples).to(device)
+    psedu_label = torch.zeros(n_samples).to(device)
     with torch.no_grad():
         for it, sample in enumerate(pbar):
             indices = sample['index']
@@ -100,7 +104,7 @@ def robust_train(net, scs, scr, n_samples, net_ema, ema, optimizer, trainloader,
         indices = sample['index']
         x, x_s = sample['data']
         x, x_s = x.to(device), x_s.to(device)
-        y = sample['label'].to(device)
+        y = sample['label'].to(device).long()
         outputs = net(x)
         outputs_s = net(x_s)
         pesudo = psedu_label[indices].long()
@@ -186,12 +190,12 @@ class ResNet(nn.Module):
 
 
 def build_model(num_classes, params_init, dev, config):
-    if config.dataset.startswith('web-'):
+    if config.dataset.startswith('web-') or config.dataset == 'stanford-dogs':
         net = ResNet(arch="resnet50", num_classes=num_classes, pretrained=True)
     else:
         net = CNN(input_channel=3, n_outputs=n_classes)
 
-    return net.cuda()
+    return net.to(dev)
 
 
 def build_optimizer(net, params):
@@ -213,19 +217,75 @@ def build_loader(params):
                                                           transform['cifar_train_strong_aug']),
                                           transform['cifar_test'], noise_type=params.noise_type,
                                           openset_ratio=params.openset_ratio, closeset_ratio=params.closeset_ratio)
-        trainloader = DataLoader(dataset['train'], batch_size=params.batch_size, shuffle=True, num_workers=8,
+        trainloader = DataLoader(dataset['train'], batch_size=params.batch_size, shuffle=True, num_workers=0,
                                  pin_memory=True)
-        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=8, pin_memory=False)
+        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=0, pin_memory=False)
     if dataset_n.startswith('web-'):
         class_ = {"web-aircraft": 100, "web-bird": 200, "web-car": 196}
         num_classes = class_[dataset_n]
         transform = build_transform(rescale_size=448, crop_size=448)
-        dataset = build_webfg_dataset(os.path.join('Datasets', dataset_n),
+        
+        # 检查数据集路径是否存在
+        dataset_path = os.path.join('Datasets', dataset_n)
+        train_path = os.path.join(dataset_path, 'train')
+        val_path = os.path.join(dataset_path, 'val')
+        
+        # 检查是否使用虚拟数据集
+        use_dummy = False
+        if not os.path.exists(dataset_path) or not os.path.exists(train_path) or not os.path.exists(val_path):
+            print(f"警告: 数据集路径 '{dataset_path}' 或其子目录不存在!")
+            print(f"您可以从 https://github.com/NUST-Machine-Intelligence-Laboratory/weblyFG-dataset 下载 {dataset_n} 数据集")
+            print(f"并将其放置在 '{dataset_path}' 目录下，确保有 'train' 和 'val' 子目录")
+            print("\n正在使用虚拟数据集进行测试...")
+            use_dummy = True
+        
+        if use_dummy:
+            # 使用虚拟数据集
+            dataset = build_dummy_webfg_dataset(dataset_path,
+                                             CLDataTransform(transform['train'], transform["train_strong_aug"]),
+                                             transform['test'],
+                                             dataset_name=dataset_n)
+        else:
+            # 使用实际数据集
+            dataset = build_webfg_dataset(dataset_path,
                                       CLDataTransform(transform['train'], transform["train_strong_aug"]),
                                       transform['test'])
-        trainloader = DataLoader(dataset["train"], batch_size=params.batch_size, shuffle=True, num_workers=4,
+        trainloader = DataLoader(dataset["train"], batch_size=params.batch_size, shuffle=True, num_workers=0,
                                  pin_memory=True)
-        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=4,
+        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=0,
+                                 pin_memory=False)
+    
+    elif dataset_n == 'stanford-dogs':
+        num_classes = 120  # Stanford Dogs有120个狗品种类别
+        transform = build_transform(rescale_size=448, crop_size=448)
+        
+        # 检查数据集路径是否存在
+        dataset_path = os.path.join('Datasets', dataset_n)
+        train_path = os.path.join(dataset_path, 'train')
+        val_path = os.path.join(dataset_path, 'val')
+        
+        # 检查是否使用虚拟数据集
+        use_dummy = False
+        if not os.path.exists(dataset_path) or not os.path.exists(train_path) or not os.path.exists(val_path):
+            print(f"警告: 数据集路径 '{dataset_path}' 或其子目录不存在!")
+            print(f"您可以从 http://vision.stanford.edu/aditya86/ImageNetDogs/ 下载 Stanford Dogs 数据集")
+            print(f"并将其放置在 '{dataset_path}' 目录下，确保有 'train' 和 'val' 子目录")
+            print("\n正在使用虚拟数据集进行测试...")
+            use_dummy = True
+        
+        if use_dummy:
+            # 使用虚拟数据集
+            dataset = build_dummy_stanford_dogs_dataset(dataset_path,
+                                                   CLDataTransform(transform['train'], transform["train_strong_aug"]),
+                                                   transform['test'])
+        else:
+            # 使用实际数据集
+            dataset = build_stanford_dogs_dataset(dataset_path,
+                                              CLDataTransform(transform['train'], transform["train_strong_aug"]),
+                                              transform['test'])
+        trainloader = DataLoader(dataset["train"], batch_size=params.batch_size, shuffle=True, num_workers=0,
+                                 pin_memory=True)
+        test_loader = DataLoader(dataset['test'], batch_size=16, shuffle=False, num_workers=0,
                                  pin_memory=False)
 
     num_samples = len(trainloader.dataset)
@@ -295,7 +355,7 @@ if __name__ == '__main__':
         path = config.resume
         dict_s = torch.load(path, map_location='cpu')
         model.load_state_dict(dict_s)
-        model.cuda()
+        model.to(device)
 
     # create optimizer & lr_plan or lr_scheduler
     optim = build_optimizer(model, config)
